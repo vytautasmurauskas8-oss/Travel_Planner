@@ -149,6 +149,74 @@ h1 { color: var(--ink); font: 400 clamp(39px, 5vw, 58px)/1.08 var(--serif); lett
 .not-found-page .intro, .details-page .intro { max-width: 430px; margin: 0 auto 24px; }
 .not-found-mark { display: grid; place-items: center; width: 100px; height: 100px; margin: 0 auto 22px; border: 1px solid #e9d9cd; border-radius: 50%; color: var(--terracotta); font: 400 30px var(--serif); }
 .details-page code { color: var(--terracotta); background: #f7eee6; padding: 2px 6px; border-radius: 3px; }
+.site-navigation { display: flex; align-items: center; gap: 30px; }
+.mobile-menu-toggle { display: none; }
+.page-content, .trip-card, .day-content, .activity-item, .activity-info, .form-page { min-width: 0; }
+.trip-card h3, .activity-info h4, .activity-info p, .trip-description { overflow-wrap: anywhere; }
+.activity-time { white-space: nowrap; }
+.form-grid > *, .form-card label, .activity-form label { min-width: 0; }
+@media (max-width: 900px) {
+  .trip-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 650px) {
+  .site-header { position: relative; z-index: 5; height: 65px; padding: 0 20px; }
+  .mobile-menu-toggle { display: inline-flex; min-width: 64px; min-height: 42px; align-items: center; justify-content: center; padding: 8px 12px; border: 1px solid var(--border); border-radius: 3px; color: var(--ink); background: white; font: 500 12px var(--sans); cursor: pointer; }
+  .site-navigation { position: absolute; top: 100%; left: 0; right: 0; display: none; align-items: stretch; flex-direction: column; gap: 0; padding: 8px 20px 16px; border-bottom: 1px solid var(--border); background: #fffefa; box-shadow: 0 10px 20px rgba(58, 42, 31, .08); }
+  .site-navigation.mobile-menu-open { display: flex; }
+  .site-navigation .main-nav, .site-navigation .account-nav { align-items: stretch; flex-direction: column; gap: 0; }
+  .site-navigation .main-nav a, .site-navigation .account-nav > a:not(.button), .site-navigation .nav-button { display: flex; min-height: 44px; align-items: center; padding: 8px 2px; font-size: 13px; }
+  .site-navigation .account-nav { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 6px; }
+  .site-navigation .user-email { display: block; max-width: 100%; min-height: 36px; padding: 9px 2px 3px; font-size: 11px; }
+  .site-navigation .account-nav .button { align-self: flex-start; min-height: 42px; margin-top: 5px; padding: 10px 16px; font-size: 12px; }
+  .site-navigation .nav-button { width: 100%; border: 0; background: transparent; text-align: left; }
+  .nav-error { top: calc(100% + 4px); right: 12px; left: 12px; }
+  .page-content { width: min(100% - 40px, 960px); }
+  .trip-grid { grid-template-columns: 1fr; }
+  .welcome-row { gap: 16px; }
+  .welcome-row > div:first-child { min-width: 0; }
+  .welcome-row h1 { font-size: clamp(34px, 8vw, 39px); }
+  .section-heading { gap: 14px; }
+  .section-heading > * { min-width: 0; }
+  .section-heading .text-link { flex: 0 0 auto; }
+  .form-page { width: 100%; margin-bottom: 48px; }
+  .form-card { width: 100%; padding: 22px; }
+  .form-grid { gap: 10px; }
+  .form-card input, .form-card textarea, .activity-form input, .activity-form textarea { min-height: 44px; font-size: 16px; }
+  .activity-form textarea, .form-card textarea { min-height: 88px; }
+  .form-actions .button, .form-actions .cancel-link, .activity-form-actions .button, .activity-form-actions .cancel-link { min-height: 44px; }
+  .itinerary-section { margin-top: 42px; }
+  .itinerary-day { grid-template-columns: 42px minmax(0, 1fr); gap: 9px; }
+  .day-heading { flex-wrap: wrap; align-items: center; }
+  .day-heading h3 { min-width: 0; overflow-wrap: anywhere; }
+  .add-activity-button { min-height: 40px; padding: 8px 10px; font-size: 11px; }
+  .activity-item, .activity-item-managed { grid-template-columns: 56px minmax(0, 1fr); gap: 8px; padding: 11px; }
+  .activity-actions { grid-column: 2; justify-content: flex-start; gap: 8px; }
+  .activity-action-button { min-width: 48px; min-height: 40px; padding: 8px; font-size: 12px; }
+  .activity-info h4 { align-items: flex-start; line-height: 1.5; }
+  .activity-info p { overflow-wrap: anywhere; }
+  .activity-form { padding: 14px; }
+  .activity-form .form-grid { grid-template-columns: 1fr; }
+  .site-footer { flex-wrap: wrap; }
+}
+@media (max-width: 410px) {
+  .welcome-row { padding: 44px 0 38px; }
+  .welcome-row h1 { font-size: 34px; }
+  .section-heading { align-items: flex-start; }
+  .section-heading p { max-width: 185px; }
+  .form-card { padding: 18px; }
+  .form-grid { grid-template-columns: 1fr; }
+  .form-actions { justify-content: space-between; gap: 10px; }
+  .form-actions .button { gap: 8px; padding: 12px; }
+  .trip-actions { flex-wrap: wrap; }
+  .trip-actions > * { flex: 1 1 130px; }
+  .itinerary-heading h2 { font-size: 24px; }
+  .itinerary-day { grid-template-columns: 34px minmax(0, 1fr); gap: 7px; }
+  .day-marker strong { font-size: 24px; }
+  .activity-item, .activity-item-managed { grid-template-columns: 48px minmax(0, 1fr); padding: 10px; }
+  .activity-dialog-actions { gap: 10px; }
+  .site-footer { align-items: flex-start; flex-direction: column; }
+  .site-footer span:last-child { max-width: none; text-align: left; }
+}
 @media (max-width: 650px) {
   .site-header { height: 65px; padding: 0 20px; }
   .brand { font-size: 19px; }
