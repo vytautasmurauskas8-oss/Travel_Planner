@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './context/useAuth'
 import { checkSupabaseConnection, supabase, supabaseConfigError } from './lib/supabase'
@@ -96,6 +96,7 @@ function NewTrip() {
   const navigate = useNavigate()
   const [form, setForm] = useState({ title: '', city: '', country: '', startDate: '', endDate: '', description: '' })
   const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
 
@@ -123,6 +124,7 @@ function NewTrip() {
   async function handleSubmit(event) {
     event.preventDefault()
     setErrorMessage('')
+    if (savingRef.current) return
     if (!user) {
       navigate('/login', { replace: true, state: { from: { pathname: '/trips/new' } } })
       return
@@ -133,9 +135,10 @@ function NewTrip() {
       return
     }
 
+    savingRef.current = true
     setSaving(true)
     try {
-      const { error } = await supabase.from('trips').insert({
+      const { data, error } = await supabase.from('trips').insert({
         user_id: user.id,
         title: form.title.trim(),
         city: form.city.trim(),
@@ -143,13 +146,15 @@ function NewTrip() {
         start_date: form.startDate,
         end_date: form.endDate,
         description: form.description.trim() || null,
-      })
+      }).select('id').single()
       if (error) throw error
+      if (!data?.id) throw new Error('The trip was not returned after saving.')
       navigate('/', { replace: true, state: { tripCreated: true } })
     } catch (error) {
       console.error('Could not create trip:', error)
       setErrorMessage(getTripCreationErrorMessage(error))
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
   }
@@ -180,7 +185,9 @@ function AuthPage({ register = false }) {
   const [password, setPassword] = useState('')
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
   const [loading, setLoading] = useState(false)
+  const loadingRef = useRef(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
   const [successMessage, setSuccessMessage] = useState('')
 
   if (user) return <Navigate to={location.state?.from?.pathname ?? '/'} replace />
@@ -189,18 +196,16 @@ function AuthPage({ register = false }) {
     event.preventDefault()
     setErrorMessage('')
     setSuccessMessage('')
+    setFieldErrors({})
+    if (loadingRef.current) return
 
     const normalizedEmail = email.trim()
-    if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-      setErrorMessage('Enter a valid email address.')
-      return
-    }
-    if (password.length < 8) {
-      setErrorMessage('Your password must be at least 8 characters long.')
-      return
-    }
-    if (register && password !== passwordConfirmation) {
-      setErrorMessage('The passwords do not match.')
+    const errors = {}
+    if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) errors.email = 'Enter a valid email address.'
+    if (!password || (register && password.length < 8)) errors.password = register ? 'Your password must be at least 8 characters long.' : 'Enter your password.'
+    if (register && password !== passwordConfirmation) errors.passwordConfirmation = 'The passwords do not match.'
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors)
       return
     }
     if (!supabase) {
@@ -208,6 +213,7 @@ function AuthPage({ register = false }) {
       return
     }
 
+    loadingRef.current = true
     setLoading(true)
     try {
       if (register) {
@@ -227,6 +233,7 @@ function AuthPage({ register = false }) {
       console.error(`Supabase ${register ? 'sign up' : 'sign in'} failed:`, error)
       setErrorMessage(getAuthErrorMessage(error, register))
     } finally {
+      loadingRef.current = false
       setLoading(false)
     }
   }
@@ -234,9 +241,9 @@ function AuthPage({ register = false }) {
   const title = register ? 'Make it official.' : 'Good to have you back.'
   return <PageShell><div className="form-page auth-page"><div className="auth-mark"><CompassMark /></div><p className="eyebrow">{register ? 'YOUR NEXT CHAPTER' : 'PICK UP WHERE YOU LEFT OFF'}</p><h1>{title}</h1><p className="intro">{register ? 'Create an account to keep your travel ideas together.' : 'Sign in to find your trips and travel plans.'}</p>
     <form className="form-card" onSubmit={handleSubmit} noValidate>
-      <label>Email address<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required /></label>
-      <label>Password<input type="password" autoComplete={register ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" required minLength={8} /></label>
-      {register && <label>Confirm password<input type="password" autoComplete="new-password" value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} placeholder="Enter your password again" required minLength={8} /></label>}
+      <label>Email address<input type="email" autoComplete="email" value={email} onChange={(event) => { setEmail(event.target.value); setFieldErrors((current) => ({ ...current, email: '' })) }} placeholder="you@example.com" required aria-invalid={Boolean(fieldErrors.email)} aria-describedby={fieldErrors.email ? 'auth-email-error' : undefined} />{fieldErrors.email && <span className="field-error" id="auth-email-error">{fieldErrors.email}</span>}</label>
+      <label>Password<input type="password" autoComplete={register ? 'new-password' : 'current-password'} value={password} onChange={(event) => { setPassword(event.target.value); setFieldErrors((current) => ({ ...current, password: '' })) }} placeholder="At least 8 characters" required minLength={register ? 8 : undefined} aria-invalid={Boolean(fieldErrors.password)} aria-describedby={fieldErrors.password ? 'auth-password-error' : undefined} />{fieldErrors.password && <span className="field-error" id="auth-password-error">{fieldErrors.password}</span>}</label>
+      {register && <label>Confirm password<input type="password" autoComplete="new-password" value={passwordConfirmation} onChange={(event) => { setPasswordConfirmation(event.target.value); setFieldErrors((current) => ({ ...current, passwordConfirmation: '' })) }} placeholder="Enter your password again" required minLength={8} aria-invalid={Boolean(fieldErrors.passwordConfirmation)} aria-describedby={fieldErrors.passwordConfirmation ? 'auth-confirm-error' : undefined} />{fieldErrors.passwordConfirmation && <span className="field-error" id="auth-confirm-error">{fieldErrors.passwordConfirmation}</span>}</label>}
       {errorMessage && <p className="form-message form-error" role="alert">{errorMessage}</p>}
       {successMessage && <p className="form-message form-success" role="status">{successMessage}</p>}
       <button className="button button-full" type="submit" disabled={loading}>{loading ? (register ? 'Creating account…' : 'Signing in…') : (register ? 'Create Account' : 'Sign In')}</button>

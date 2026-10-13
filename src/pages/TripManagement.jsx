@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/useAuth'
 import { supabase, supabaseConfigError } from '../lib/supabase'
 import PageShell from '../components/PageShell'
 
-function useOwnedTrip(tripId) {
+function useOwnedTrip(tripId, retryCount = 0) {
   const { user } = useAuth()
   const [record, setRecord] = useState({ ownerId: null, status: 'loading', trip: null, message: '' })
 
@@ -46,7 +46,7 @@ function useOwnedTrip(tripId) {
 
     loadTrip()
     return () => { isCurrent = false }
-  }, [tripId, user.id])
+  }, [tripId, user.id, retryCount])
 
   return record.ownerId === user.id ? record : { status: 'loading', trip: null, message: '' }
 }
@@ -55,9 +55,9 @@ function TripPageShell({ children }) {
   return <PageShell><div className="form-page details-page">{children}</div></PageShell>
 }
 
-function TripLoadState({ record }) {
+function TripLoadState({ record, onRetry }) {
   if (record.status === 'loading') return <p className="trips-feedback" role="status">Loading trip…</p>
-  if (record.status === 'error' || record.status === 'not_found') return <div className="trips-feedback trips-error" role="alert"><p>{record.message}</p><Link className="button" to="/">Back to Dashboard</Link></div>
+  if (record.status === 'error' || record.status === 'not_found') return <div className="trips-feedback trips-error" role="alert"><p>{record.message}</p>{record.status === 'error' && onRetry && <button className="text-button" type="button" onClick={onRetry}>Try again</button>}<Link className="button" to="/">Back to Dashboard</Link></div>
   return null
 }
 
@@ -65,15 +65,22 @@ export function TripDetails() {
   const { id } = useParams()
   const { user } = useAuth()
   const navigate = useNavigate()
-  const record = useOwnedTrip(id)
+  const [retryCount, setRetryCount] = useState(0)
+  const record = useOwnedTrip(id, retryCount)
   const [deleting, setDeleting] = useState(false)
+  const deletingRef = useRef(false)
   const [actionError, setActionError] = useState('')
 
   async function deleteTrip() {
-    if (!record.trip || deleting) return
+    if (!record.trip || deletingRef.current) return
     if (!window.confirm(`Delete "${record.trip.title}"? This cannot be undone.`)) return
 
     setActionError('')
+    if (!supabase) {
+      setActionError(supabaseConfigError)
+      return
+    }
+    deletingRef.current = true
     setDeleting(true)
     try {
       const { data, error } = await supabase
@@ -92,11 +99,12 @@ export function TripDetails() {
       console.error('Could not delete trip:', error)
       setActionError('We could not delete this trip. Please try again.')
     } finally {
+      deletingRef.current = false
       setDeleting(false)
     }
   }
 
-  if (record.status !== 'success') return <TripPageShell><Link className="back-link" to="/">← Back to your trips</Link><TripLoadState record={record} /></TripPageShell>
+  if (record.status !== 'success') return <TripPageShell><Link className="back-link" to="/">← Back to your trips</Link><TripLoadState record={record} onRetry={() => setRetryCount((count) => count + 1)} /></TripPageShell>
 
   const { trip } = record
   return <TripPageShell><Link className="back-link" to="/">← Back to your trips</Link><div className="not-found-mark" aria-hidden="true">✳</div><p className="eyebrow">TRIP DETAILS</p><h1>{trip.title}</h1><p className="intro">{trip.city}, {trip.country}</p><p className="trip-detail-dates">{formatDate(trip.start_date)} – {formatDate(trip.end_date)}</p>{trip.description && <p className="trip-description">{trip.description}</p>}
@@ -112,6 +120,7 @@ function TripItinerary({ trip, ownerId }) {
   const [activeForm, setActiveForm] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
+  const deletingActivityRef = useRef(false)
   const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
@@ -152,8 +161,13 @@ function TripItinerary({ trip, ownerId }) {
   const days = getTripDays(trip.start_date, trip.end_date)
 
   async function confirmDeleteActivity() {
-    if (!pendingDelete || deletingId) return
+    if (!pendingDelete || deletingActivityRef.current) return
     setDeleteError('')
+    if (!supabase) {
+      setDeleteError(supabaseConfigError)
+      return
+    }
+    deletingActivityRef.current = true
     setDeletingId(pendingDelete.id)
     try {
       const { data, error } = await supabase
@@ -174,6 +188,7 @@ function TripItinerary({ trip, ownerId }) {
       console.error('Could not delete activity:', error)
       setDeleteError('We could not delete this activity. Please try again.')
     } finally {
+      deletingActivityRef.current = false
       setDeletingId(null)
     }
   }
@@ -220,23 +235,27 @@ function ActivityForm({ trip, day, ownerId, onCancel, onCreated, onUpdated, acti
   })
   const [errorMessage, setErrorMessage] = useState('')
   const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
+  const [fieldErrors, setFieldErrors] = useState({})
   const isEditing = Boolean(activity)
 
   function updateField(event) {
     const { name, value } = event.target
     setForm((current) => ({ ...current, [name]: value }))
     setErrorMessage('')
+    setFieldErrors((current) => ({ ...current, [name]: '' }))
   }
 
   async function handleSubmit(event) {
     event.preventDefault()
     setErrorMessage('')
-    if (!form.title.trim()) {
-      setErrorMessage('Enter an activity name.')
-      return
-    }
-    if (!form.activity_date || form.activity_date < trip.start_date || form.activity_date > trip.end_date) {
-      setErrorMessage('Choose a date within this trip.')
+    if (savingRef.current) return
+    const errors = {}
+    if (!form.title.trim()) errors.title = 'Enter an activity name.'
+    if (!form.activity_date || form.activity_date < trip.start_date || form.activity_date > trip.end_date) errors.activity_date = 'Choose a date within this trip.'
+    if (form.activity_time && !/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,6})?)?$/.test(form.activity_time)) errors.activity_time = 'Enter a valid time.'
+    setFieldErrors(errors)
+    if (Object.keys(errors).length) {
       return
     }
     if (!user || user.id !== ownerId) {
@@ -248,6 +267,7 @@ function ActivityForm({ trip, day, ownerId, onCancel, onCreated, onUpdated, acti
       return
     }
 
+    savingRef.current = true
     setSaving(true)
     try {
       const changes = {
@@ -273,15 +293,16 @@ function ActivityForm({ trip, day, ownerId, onCancel, onCreated, onUpdated, acti
       console.error(`Could not ${isEditing ? 'update' : 'create'} activity:`, error)
       setErrorMessage(getActivitySaveErrorMessage(error, isEditing))
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
   }
 
   return <form className="activity-form" onSubmit={handleSubmit} noValidate>
     <p className="activity-form-date">{isEditing ? 'Edit activity' : `Adding to ${formatLongDate(day)}`}</p>
-    <label>Activity name<input name="title" value={form.title} onChange={updateField} placeholder="Visit the bamboo grove" required autoFocus /></label>
-    {isEditing && <label>Date<input name="activity_date" type="date" value={form.activity_date} min={trip.start_date} max={trip.end_date} onChange={updateField} required /></label>}
-    <div className="form-grid"><label>Time <span className="optional">(optional)</span><input name="activity_time" type="time" step="1" value={form.activity_time} onChange={updateField} /></label><label>Location <span className="optional">(optional)</span><input name="location" value={form.location} onChange={updateField} placeholder="Arashiyama" /></label></div>
+    <label>Activity name<input name="title" value={form.title} onChange={updateField} placeholder="Visit the bamboo grove" required autoFocus aria-invalid={Boolean(fieldErrors.title)} aria-describedby={fieldErrors.title ? 'activity-title-error' : undefined} />{fieldErrors.title && <span className="field-error" id="activity-title-error">{fieldErrors.title}</span>}</label>
+    {isEditing && <label>Date<input name="activity_date" type="date" value={form.activity_date} min={trip.start_date} max={trip.end_date} onChange={updateField} required aria-invalid={Boolean(fieldErrors.activity_date)} aria-describedby={fieldErrors.activity_date ? 'activity-date-error' : undefined} />{fieldErrors.activity_date && <span className="field-error" id="activity-date-error">{fieldErrors.activity_date}</span>}</label>}
+    <div className="form-grid"><label>Time <span className="optional">(optional)</span><input name="activity_time" type="time" step="1" value={form.activity_time} onChange={updateField} aria-invalid={Boolean(fieldErrors.activity_time)} aria-describedby={fieldErrors.activity_time ? 'activity-time-error' : undefined} />{fieldErrors.activity_time && <span className="field-error" id="activity-time-error">{fieldErrors.activity_time}</span>}</label><label>Location <span className="optional">(optional)</span><input name="location" value={form.location} onChange={updateField} placeholder="Arashiyama" /></label></div>
     <label>Description <span className="optional">(optional)</span><textarea name="notes" value={form.notes} onChange={updateField} rows="2" placeholder="A few details to remember" /></label>
     {errorMessage && <p className="form-message form-error" role="alert">{errorMessage}</p>}
     <div className="activity-form-actions"><button className="cancel-link" type="button" onClick={onCancel} disabled={saving}>Cancel</button><button className="button" type="submit" disabled={saving}>{saving ? 'Saving…' : (isEditing ? 'Save changes' : 'Save activity')}</button></div>
@@ -333,6 +354,7 @@ function EditTripForm({ trip }) {
   const [fieldErrors, setFieldErrors] = useState({})
   const [errorMessage, setErrorMessage] = useState('')
   const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
 
   function updateField(event) {
     const { name, value } = event.target
@@ -356,8 +378,18 @@ function EditTripForm({ trip }) {
   async function handleSubmit(event) {
     event.preventDefault()
     setErrorMessage('')
+    if (savingRef.current) return
     if (!validateForm()) return
+    if (!user || user.id !== trip.user_id) {
+      setErrorMessage('Your session changed. Reload the trip before saving changes.')
+      return
+    }
+    if (!supabase) {
+      setErrorMessage(supabaseConfigError)
+      return
+    }
 
+    savingRef.current = true
     setSaving(true)
     try {
       const { data, error } = await supabase
@@ -384,6 +416,7 @@ function EditTripForm({ trip }) {
       console.error('Could not update trip:', error)
       setErrorMessage(getUpdateErrorMessage(error))
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
   }
@@ -402,11 +435,12 @@ function EditTripForm({ trip }) {
 
 export function EditTrip() {
   const { id } = useParams()
-  const record = useOwnedTrip(id)
+  const [retryCount, setRetryCount] = useState(0)
+  const record = useOwnedTrip(id, retryCount)
 
   return <TripPageShell>{record.status === 'success'
     ? <EditTripForm key={record.trip.id} trip={record.trip} />
-    : <><Link className="back-link" to="/">← Back to your trips</Link><TripLoadState record={record} /></>}</TripPageShell>
+    : <><Link className="back-link" to="/">← Back to your trips</Link><TripLoadState record={record} onRetry={() => setRetryCount((count) => count + 1)} /></>}</TripPageShell>
 }
 
 function formatDate(date) {
