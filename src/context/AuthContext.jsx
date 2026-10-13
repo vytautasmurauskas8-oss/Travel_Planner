@@ -16,11 +16,17 @@ export function AuthProvider({ children }) {
       setLoading(false)
     })
 
-    supabase.auth.getSession().then(({ data, error }) => {
-      if (error) console.error('Could not restore Supabase session:', error)
-      if (!receivedAuthEvent) setSession(data?.session ?? null)
-      setLoading(false)
-    })
+    supabase.auth.getSession()
+      .then(({ data, error }) => {
+        if (error) console.error('Could not restore Supabase session:', error)
+        if (!receivedAuthEvent) setSession(data?.session ?? null)
+        setLoading(false)
+      })
+      .catch((error) => {
+        console.error('Could not restore Supabase session:', error)
+        if (!receivedAuthEvent) setSession(null)
+        setLoading(false)
+      })
 
     return () => subscription.unsubscribe()
   }, [])
