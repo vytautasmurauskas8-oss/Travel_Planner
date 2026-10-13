@@ -71,8 +71,7 @@ export function TripDetails() {
 
   async function deleteTrip() {
     if (!record.trip || deleting) return
-    const confirmed = window.confirm(`Delete “${record.trip.title}”? This cannot be undone.`)
-    if (!confirmed) return
+    if (!window.confirm(`Delete "${record.trip.title}"? This cannot be undone.`)) return
 
     setActionError('')
     setDeleting(true)
@@ -83,7 +82,6 @@ export function TripDetails() {
         .eq('id', id)
         .eq('user_id', user.id)
         .select('id')
-
       if (error) throw error
       if (!data?.length) {
         setActionError('This trip was not deleted. It may no longer exist or you may not have permission to delete it.')
@@ -104,9 +102,91 @@ export function TripDetails() {
   return <TripPageShell><Link className="back-link" to="/">← Back to your trips</Link><div className="not-found-mark" aria-hidden="true">✳</div><p className="eyebrow">TRIP DETAILS</p><h1>{trip.title}</h1><p className="intro">{trip.city}, {trip.country}</p><p className="trip-detail-dates">{formatDate(trip.start_date)} – {formatDate(trip.end_date)}</p>{trip.description && <p className="trip-description">{trip.description}</p>}
     {actionError && <p className="form-message form-error" role="alert">{actionError}</p>}
     <div className="trip-actions"><Link className="button" to={`/trips/${trip.id}/edit`}>Edit trip</Link><button className="button button-danger" type="button" onClick={deleteTrip} disabled={deleting}>{deleting ? 'Deleting…' : 'Delete trip'}</button></div>
+    <TripItinerary trip={trip} ownerId={user.id} />
   </TripPageShell>
 }
 
+function TripItinerary({ trip, ownerId }) {
+  const [state, setState] = useState({ tripId: null, ownerId: null, status: 'loading', activities: [], message: '' })
+  const [retryCount, setRetryCount] = useState(0)
+
+  useEffect(() => {
+    let isCurrent = true
+    async function loadActivities() {
+      setState({ tripId: trip.id, ownerId, status: 'loading', activities: [], message: '' })
+      if (!supabase) {
+        setState({ tripId: trip.id, ownerId, status: 'error', activities: [], message: supabaseConfigError })
+        return
+      }
+      try {
+        const { data, error } = await supabase
+          .from('activities')
+          .select('id, trip_id, title, activity_date, activity_time, location, notes, is_completed')
+          .eq('trip_id', trip.id)
+          .order('activity_date', { ascending: true })
+          .order('activity_time', { ascending: true, nullsFirst: false })
+        if (!isCurrent) return
+        if (error) {
+          console.error('Could not load trip activities:', error)
+          setState({ tripId: trip.id, ownerId, status: 'error', activities: [], message: 'We could not load the itinerary. Check your connection and try again.' })
+          return
+        }
+        setState({ tripId: trip.id, ownerId, status: 'success', activities: data ?? [], message: '' })
+      } catch (error) {
+        if (!isCurrent) return
+        console.error('Could not load trip activities:', error)
+        setState({ tripId: trip.id, ownerId, status: 'error', activities: [], message: 'We could not load the itinerary. Check your connection and try again.' })
+      }
+    }
+    loadActivities()
+    return () => { isCurrent = false }
+  }, [trip.id, ownerId, retryCount])
+
+  const currentState = state.tripId === trip.id && state.ownerId === ownerId
+    ? state
+    : { status: 'loading', activities: [], message: '' }
+  const days = getTripDays(trip.start_date, trip.end_date)
+
+  return <section className="itinerary-section" aria-labelledby="itinerary-heading">
+    <div className="itinerary-heading"><div><p className="eyebrow">THE DAY BY DAY</p><h2 id="itinerary-heading">Your itinerary</h2></div><span>{days.length} {days.length === 1 ? 'day' : 'days'}</span></div>
+    {currentState.status === 'loading' && <p className="itinerary-feedback" role="status">Loading activities…</p>}
+    {currentState.status === 'error' && <div className="itinerary-feedback itinerary-error" role="alert"><p>{currentState.message}</p><button type="button" className="text-button" onClick={() => setRetryCount((count) => count + 1)}>Try again</button></div>}
+    {currentState.status === 'success' && <div className="itinerary-days">{days.map((day) => {
+      const dayActivities = currentState.activities.filter((activity) => activity.activity_date === day.date)
+      return <article className="itinerary-day" key={day.date}>
+        <div className="day-marker"><span>DAY</span><strong>{day.number}</strong></div>
+        <div className="day-content"><div className="day-heading"><h3>{formatLongDate(day.date)}</h3><button className="add-activity-button" type="button" disabled title="Activity creation will be available in a future update">+ Add activity</button></div>
+          {dayActivities.length === 0
+            ? <p className="no-activities">No activities planned yet.</p>
+            : <ul className="activity-list">{dayActivities.map((activity) => <li className="activity-item" key={activity.id}><div className="activity-time">{activity.activity_time ? formatTime(activity.activity_time) : 'Any time'}</div><div className="activity-info"><h4>{activity.title}{activity.is_completed && <span className="activity-complete">Completed</span>}</h4>{activity.location && <p>{activity.location}</p>}{activity.notes && <p className="activity-notes">{activity.notes}</p>}</div></li>)}</ul>}
+        </div>
+      </article>
+    })}</div>}
+  </section>
+}
+
+function getTripDays(startDate, endDate) {
+  const dateValue = (value) => {
+    const [year, month, day] = value.split('-').map(Number)
+    return Date.UTC(year, month - 1, day)
+  }
+  const start = dateValue(startDate)
+  const end = dateValue(endDate)
+  const days = []
+  for (let current = start, number = 1; current <= end; current += 86400000, number += 1) {
+    days.push({ number, date: new Date(current).toISOString().slice(0, 10) })
+  }
+  return days
+}
+
+function formatLongDate(date) {
+  return new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`))
+}
+
+function formatTime(time) {
+  const [hours, minutes] = time.split(':').map(Number)
+  return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(Date.UTC(2020, 0, 1, hours, minutes)))
+}
 function EditTripForm({ trip }) {
   const { user } = useAuth()
   const navigate = useNavigate()
