@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import { Link, NavLink, Route, Routes, useParams } from 'react-router-dom'
+import { checkSupabaseConnection } from './lib/supabase'
 import './App.css'
 
 function CompassMark() {
@@ -69,8 +71,22 @@ function NotFound() {
   return <PageShell><div className="form-page not-found-page"><div className="not-found-mark" aria-hidden="true">404</div><p className="eyebrow">OFF THE MAP</p><h1>Looks like a wrong turn.</h1><p className="intro">We can’t find the page you’re looking for. Let’s get you back on track.</p><Link className="button" to="/">Back to your trips <span aria-hidden="true">→</span></Link></div></PageShell>
 }
 
+function SupabaseCheck() {
+  const [result, setResult] = useState(null)
+
+  useEffect(() => {
+    let isCurrent = true
+    checkSupabaseConnection().then((connectionResult) => {
+      if (isCurrent) setResult(connectionResult)
+    })
+    return () => { isCurrent = false }
+  }, [])
+
+  return <main><h1>Supabase connection check</h1><p role="status" aria-live="polite">{result ? `${result.status}: ${result.message ?? result.error}` : 'Checking Supabase…'}</p><p>This check never displays configuration values. A successful anonymous query does not prove authenticated RLS access.</p></main>
+}
+
 function App() {
-  return <Routes><Route path="/" element={<Dashboard />} /><Route path="/trips/new" element={<NewTrip />} /><Route path="/trips/:id" element={<TripDetails />} /><Route path="/login" element={<AuthPage />} /><Route path="/register" element={<AuthPage register />} /><Route path="*" element={<NotFound />} /></Routes>
+  return <Routes><Route path="/" element={<Dashboard />} /><Route path="/trips/new" element={<NewTrip />} /><Route path="/trips/:id" element={<TripDetails />} /><Route path="/login" element={<AuthPage />} /><Route path="/register" element={<AuthPage register />} /><Route path="/supabase-check" element={<SupabaseCheck />} /><Route path="*" element={<NotFound />} /></Routes>
 }
 
 export default App
