@@ -127,9 +127,86 @@ function formatTripDates(startDate, endDate) {
 }
 
 function NewTrip() {
-  return <PageShell><div className="form-page"><Link className="back-link" to="/">← Back to your trips</Link><p className="eyebrow">SOMETHING TO LOOK FORWARD TO</p><h1>Plan a new trip</h1><p className="intro">Start with the basics. The details can come later.</p><form className="form-card" onSubmit={(event) => event.preventDefault()}><label>Where are you headed?<input type="text" placeholder="e.g. Kyoto, Japan" /></label><div className="form-grid"><label>Departure<input type="date" /></label><label>Return<input type="date" /></label></div><label>Trip name <span className="optional">(optional)</span><input type="text" placeholder="A week among the temples" /></label><p className="demo-note">Trip planning will be available in a future update.</p><button className="button" type="submit">Start planning <span aria-hidden="true">→</span></button></form></div></PageShell>
+  const { user } = useAuth()
+  const navigate = useNavigate()
+  const [form, setForm] = useState({ title: '', city: '', country: '', startDate: '', endDate: '', description: '' })
+  const [saving, setSaving] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
+
+  function updateField(event) {
+    const { name, value } = event.target
+    setForm((current) => ({ ...current, [name]: value }))
+    setFieldErrors((current) => ({ ...current, [name]: '' }))
+    setErrorMessage('')
+  }
+
+  function validateForm() {
+    const errors = {}
+    if (!form.title.trim()) errors.title = 'Enter a trip name.'
+    if (!form.city.trim()) errors.city = 'Enter a city or destination.'
+    if (!form.country.trim()) errors.country = 'Enter a country.'
+    if (!form.startDate) errors.startDate = 'Choose a departure date.'
+    if (!form.endDate) errors.endDate = 'Choose a return date.'
+    if (form.startDate && form.endDate && form.endDate < form.startDate) {
+      errors.endDate = 'The return date cannot be before the departure date.'
+    }
+    setFieldErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setErrorMessage('')
+    if (!user) {
+      navigate('/login', { replace: true, state: { from: { pathname: '/trips/new' } } })
+      return
+    }
+    if (!validateForm()) return
+    if (!supabase) {
+      setErrorMessage(supabaseConfigError)
+      return
+    }
+
+    setSaving(true)
+    try {
+      const { error } = await supabase.from('trips').insert({
+        user_id: user.id,
+        title: form.title.trim(),
+        city: form.city.trim(),
+        country: form.country.trim(),
+        start_date: form.startDate,
+        end_date: form.endDate,
+        description: form.description.trim() || null,
+      })
+      if (error) throw error
+      navigate('/', { replace: true, state: { tripCreated: true } })
+    } catch (error) {
+      console.error('Could not create trip:', error)
+      setErrorMessage(getTripCreationErrorMessage(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return <PageShell><div className="form-page"><Link className="back-link" to="/">← Back to your trips</Link><p className="eyebrow">SOMETHING TO LOOK FORWARD TO</p><h1>Plan a new trip</h1><p className="intro">Start with the basics. The details can come later.</p>
+    <form className="form-card" onSubmit={handleSubmit} noValidate>
+      <label>Trip name<input name="title" type="text" value={form.title} onChange={updateField} placeholder="A week among the temples" required aria-invalid={Boolean(fieldErrors.title)} aria-describedby={fieldErrors.title ? 'trip-title-error' : undefined} />{fieldErrors.title && <span className="field-error" id="trip-title-error">{fieldErrors.title}</span>}</label>
+      <div className="form-grid"><label>City<input name="city" type="text" value={form.city} onChange={updateField} placeholder="Kyoto" required aria-invalid={Boolean(fieldErrors.city)} aria-describedby={fieldErrors.city ? 'trip-city-error' : undefined} />{fieldErrors.city && <span className="field-error" id="trip-city-error">{fieldErrors.city}</span>}</label><label>Country<input name="country" type="text" value={form.country} onChange={updateField} placeholder="Japan" required aria-invalid={Boolean(fieldErrors.country)} aria-describedby={fieldErrors.country ? 'trip-country-error' : undefined} />{fieldErrors.country && <span className="field-error" id="trip-country-error">{fieldErrors.country}</span>}</label></div>
+      <div className="form-grid"><label>Departure<input name="startDate" type="date" value={form.startDate} onChange={updateField} required aria-invalid={Boolean(fieldErrors.startDate)} aria-describedby={fieldErrors.startDate ? 'trip-start-error' : undefined} />{fieldErrors.startDate && <span className="field-error" id="trip-start-error">{fieldErrors.startDate}</span>}</label><label>Return<input name="endDate" type="date" value={form.endDate} onChange={updateField} min={form.startDate || undefined} required aria-invalid={Boolean(fieldErrors.endDate)} aria-describedby={fieldErrors.endDate ? 'trip-end-error' : undefined} />{fieldErrors.endDate && <span className="field-error" id="trip-end-error">{fieldErrors.endDate}</span>}</label></div>
+      <label>Description <span className="optional">(optional)</span><textarea name="description" value={form.description} onChange={updateField} placeholder="What are you looking forward to?" rows="3" /></label>
+      {errorMessage && <p className="form-message form-error" role="alert">{errorMessage}</p>}
+      <div className="form-actions"><Link className="cancel-link" to="/">Cancel</Link><button className="button" type="submit" disabled={saving}>{saving ? 'Creating trip…' : 'Create Trip'} <span aria-hidden="true">→</span></button></div>
+    </form></div></PageShell>
 }
 
+function getTripCreationErrorMessage(error) {
+  const message = error?.message?.toLowerCase() ?? ''
+  if (error?.code === '42501' || message.includes('row-level security')) return 'This trip could not be saved for your account. Please sign in again and try once more.'
+  if (message.includes('network') || message.includes('fetch')) return 'Could not reach Supabase. Check your connection and try again.'
+  if (message.includes('valid_trip_dates') || message.includes('end_date')) return 'Check that the return date is the same as or later than the departure date.'
+  return 'We could not create your trip. Your form entries are still here; please try again.'
+}
 function TripDetails() {
   const { id } = useParams()
   return <PageShell><div className="form-page details-page"><Link className="back-link" to="/">← Back to your trips</Link><div className="not-found-mark" aria-hidden="true">✳</div><p className="eyebrow">TRIP DETAILS</p><h1>Your next adventure</h1><p className="intro">Trip <code>{id}</code> is ready for its plans. Trip details will appear here when trips are available.</p><Link className="button" to="/trips/new">Plan a new trip <span aria-hidden="true">→</span></Link></div></PageShell>
