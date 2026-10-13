@@ -109,6 +109,7 @@ export function TripDetails() {
 function TripItinerary({ trip, ownerId }) {
   const [state, setState] = useState({ tripId: null, ownerId: null, status: 'loading', activities: [], message: '' })
   const [retryCount, setRetryCount] = useState(0)
+  const [activeDay, setActiveDay] = useState(null)
 
   useEffect(() => {
     let isCurrent = true
@@ -155,14 +156,104 @@ function TripItinerary({ trip, ownerId }) {
       const dayActivities = currentState.activities.filter((activity) => activity.activity_date === day.date)
       return <article className="itinerary-day" key={day.date}>
         <div className="day-marker"><span>DAY</span><strong>{day.number}</strong></div>
-        <div className="day-content"><div className="day-heading"><h3>{formatLongDate(day.date)}</h3><button className="add-activity-button" type="button" disabled title="Activity creation will be available in a future update">+ Add activity</button></div>
-          {dayActivities.length === 0
+        <div className="day-content"><div className="day-heading"><h3>{formatLongDate(day.date)}</h3><button className="add-activity-button" type="button" aria-expanded={activeDay === day.date} onClick={() => setActiveDay((current) => current === day.date ? null : day.date)}>{activeDay === day.date ? 'Cancel' : '+ Add activity'}</button></div>
+          {activeDay === day.date && <ActivityForm trip={trip} day={day.date} ownerId={ownerId} onCancel={() => setActiveDay(null)} onCreated={(activity) => {
+            setState((current) => current.tripId === trip.id && current.ownerId === ownerId
+              ? { ...current, activities: [...current.activities, activity].sort(compareActivities) }
+              : current)
+            setActiveDay(null)
+          }} />}
+          {dayActivities.length === 0 && activeDay !== day.date
             ? <p className="no-activities">No activities planned yet.</p>
             : <ul className="activity-list">{dayActivities.map((activity) => <li className="activity-item" key={activity.id}><div className="activity-time">{activity.activity_time ? formatTime(activity.activity_time) : 'Any time'}</div><div className="activity-info"><h4>{activity.title}{activity.is_completed && <span className="activity-complete">Completed</span>}</h4>{activity.location && <p>{activity.location}</p>}{activity.notes && <p className="activity-notes">{activity.notes}</p>}</div></li>)}</ul>}
         </div>
       </article>
     })}</div>}
   </section>
+}
+
+function ActivityForm({ trip, day, ownerId, onCancel, onCreated }) {
+  const { user } = useAuth()
+  const [form, setForm] = useState({ title: '', activity_time: '', location: '', notes: '' })
+  const [errorMessage, setErrorMessage] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  function updateField(event) {
+    const { name, value } = event.target
+    setForm((current) => ({ ...current, [name]: value }))
+    setErrorMessage('')
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setErrorMessage('')
+    if (!form.title.trim()) {
+      setErrorMessage('Enter an activity name.')
+      return
+    }
+    if (!user || user.id !== ownerId) {
+      setErrorMessage('Your session changed. Reload the trip before adding an activity.')
+      return
+    }
+    if (!supabase) {
+      setErrorMessage(supabaseConfigError)
+      return
+    }
+
+    setSaving(true)
+    try {
+      const { data, error } = await supabase
+        .from('activities')
+        .insert({
+          trip_id: trip.id,
+          title: form.title.trim(),
+          activity_date: day,
+          activity_time: form.activity_time || null,
+          location: form.location.trim() || null,
+          notes: form.notes.trim() || null,
+          is_completed: false,
+        })
+        .select('id, trip_id, title, activity_date, activity_time, location, notes, is_completed')
+        .single()
+
+      if (error) throw error
+      if (!data) {
+        setErrorMessage('The activity was not saved. Check that you still have access to this trip and try again.')
+        return
+      }
+      onCreated(data)
+    } catch (error) {
+      console.error('Could not create activity:', error)
+      setErrorMessage(getActivityCreationErrorMessage(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return <form className="activity-form" onSubmit={handleSubmit} noValidate>
+    <p className="activity-form-date">Adding to {formatLongDate(day)}</p>
+    <label>Activity name<input name="title" value={form.title} onChange={updateField} placeholder="Visit the bamboo grove" required autoFocus /></label>
+    <div className="form-grid"><label>Time <span className="optional">(optional)</span><input name="activity_time" type="time" value={form.activity_time} onChange={updateField} /></label><label>Location <span className="optional">(optional)</span><input name="location" value={form.location} onChange={updateField} placeholder="Arashiyama" /></label></div>
+    <label>Description <span className="optional">(optional)</span><textarea name="notes" value={form.notes} onChange={updateField} rows="2" placeholder="A few details to remember" /></label>
+    {errorMessage && <p className="form-message form-error" role="alert">{errorMessage}</p>}
+    <div className="activity-form-actions"><button className="cancel-link" type="button" onClick={onCancel} disabled={saving}>Cancel</button><button className="button" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save activity'}</button></div>
+  </form>
+}
+
+function compareActivities(left, right) {
+  const dateOrder = left.activity_date.localeCompare(right.activity_date)
+  if (dateOrder !== 0) return dateOrder
+  if (!left.activity_time) return right.activity_time ? 1 : 0
+  if (!right.activity_time) return -1
+  return left.activity_time.localeCompare(right.activity_time)
+}
+
+function getActivityCreationErrorMessage(error) {
+  const message = error?.message?.toLowerCase() ?? ''
+  if (error?.code === '42501' || message.includes('row-level security')) return 'You do not have permission to add activities to this trip.'
+  if (message.includes('activity_date') || message.includes('within trip dates')) return 'Choose a date within this trip.'
+  if (message.includes('network') || message.includes('fetch')) return 'Could not reach Supabase. Check your connection and try again.'
+  return 'We could not save this activity. Your entries are still here; please try again.'
 }
 
 function getTripDays(startDate, endDate) {
@@ -184,8 +275,9 @@ function formatLongDate(date) {
 }
 
 function formatTime(time) {
-  const [hours, minutes] = time.split(':').map(Number)
-  return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(Date.UTC(2020, 0, 1, hours, minutes)))
+  const [hours, minutes] = time.split(':')
+  if (!/^\d{2}$/.test(hours ?? '') || !/^\d{2}$/.test(minutes ?? '')) return time
+  return `${hours}:${minutes}`
 }
 function EditTripForm({ trip }) {
   const { user } = useAuth()

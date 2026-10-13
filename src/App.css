@@ -98,6 +98,17 @@ h1 { color: var(--ink); font: 400 clamp(39px, 5vw, 58px)/1.08 var(--serif); lett
 .activity-info p { margin: 0 0 3px; color: var(--muted); font-size: 10px; line-height: 1.6; }
 .activity-info .activity-notes { margin-top: 6px; white-space: pre-wrap; }
 .activity-complete { padding: 3px 6px; border-radius: 10px; color: #397451; background: #edf5ef; font-size: 8px; font-weight: 500; }
+.activity-form { display: grid; gap: 12px; margin: 0 0 14px; padding: 16px; border: 1px solid #eaded4; border-radius: 4px; background: #fffdfa; }
+.activity-form-date { margin: 0; color: var(--terracotta); font-size: 10px; font-weight: 600; }
+.activity-form label { display: flex; min-width: 0; flex-direction: column; gap: 6px; color: var(--ink); font-size: 10px; font-weight: 600; }
+.activity-form input, .activity-form textarea { width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid #e5dfd9; border-radius: 3px; color: var(--ink); background: white; font: 400 11px var(--sans); box-sizing: border-box; }
+.activity-form input:focus, .activity-form textarea:focus { outline: 2px solid #d99c85; outline-offset: 1px; }
+.activity-form textarea { resize: vertical; line-height: 1.5; }
+.activity-form .form-grid { gap: 10px; }
+.activity-form-actions { display: flex; justify-content: flex-end; align-items: center; gap: 14px; }
+.activity-form-actions .cancel-link { border: 0; background: transparent; font: 500 10px var(--sans); cursor: pointer; }
+.activity-form-actions .cancel-link:disabled { cursor: wait; opacity: .6; }
+.activity-form-actions .button { padding: 9px 12px; font-size: 10px; }
 .button-danger { background: #9e4c3b; }
 .button-danger:hover { background: #823c30; }
 .button:disabled { cursor: wait; opacity: .65; transform: none; }
@@ -154,6 +165,7 @@ h1 { color: var(--ink); font: 400 clamp(39px, 5vw, 58px)/1.08 var(--serif); lett
   .day-heading h3 { font-size: 16px; }
   .add-activity-button { padding: 6px; font-size: 9px; }
   .activity-item { grid-template-columns: 56px minmax(0, 1fr); gap: 8px; padding: 11px; }
+  .activity-form { padding: 12px; }
 }
 @media (max-width: 410px) {
   .main-nav { gap: 10px; }
