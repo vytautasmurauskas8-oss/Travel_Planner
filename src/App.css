@@ -69,6 +69,12 @@ h1 { color: var(--ink); font: 400 clamp(39px, 5vw, 58px)/1.08 var(--serif); lett
 .form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 20px; }
 .cancel-link { color: var(--muted); font-size: 12px; text-decoration: none; }
 .cancel-link:hover { color: var(--terracotta); }
+.trip-detail-dates { color: var(--muted); font-size: 13px; }
+.trip-description { max-width: 500px; margin: 18px auto 28px; color: var(--muted); font-size: 13px; line-height: 1.8; white-space: pre-wrap; }
+.trip-actions { display: flex; justify-content: center; gap: 12px; margin-top: 26px; }
+.button-danger { background: #9e4c3b; }
+.button-danger:hover { background: #823c30; }
+.button:disabled { cursor: wait; opacity: .65; transform: none; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .optional { color: var(--muted); font-weight: 400; }
 .demo-note { margin: -2px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }

@@ -1,48 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './context/useAuth'
 import { checkSupabaseConnection, supabase, supabaseConfigError } from './lib/supabase'
+import { EditTrip, TripDetails } from './pages/TripManagement'
+import PageShell from './components/PageShell'
 import './App.css'
 
 function CompassMark() {
   return <span className="brand-mark" aria-hidden="true">✳</span>
-}
-
-function Navigation() {
-  const { user, loading } = useAuth()
-  const navigate = useNavigate()
-  const [logoutError, setLogoutError] = useState('')
-
-  async function handleLogout() {
-    setLogoutError('')
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      setLogoutError('Could not sign out. Please try again.')
-      console.error('Supabase sign out failed:', error)
-      return
-    }
-    navigate('/login', { replace: true })
-  }
-
-  return (
-    <header className="site-header">
-      <Link className="brand" to="/" aria-label="Travel Planner home"><CompassMark /><span>travel<span className="brand-light">planner</span></span></Link>
-      <nav className="main-nav" aria-label="Main navigation">
-        <NavLink to="/" end>My trips</NavLink>
-        <NavLink to="/trips/new" className="nav-create">+ <span>New trip</span></NavLink>
-      </nav>
-      <div className="account-nav">
-        {!loading && (user
-          ? <><span className="user-email">{user.email}</span><button className="nav-button" type="button" onClick={handleLogout}>Log out</button></>
-          : <><NavLink to="/login">Sign in</NavLink><NavLink className="button button-small" to="/register">Sign up</NavLink></>)}
-      </div>
-      {logoutError && <p className="nav-error" role="alert">{logoutError}</p>}
-    </header>
-  )
-}
-
-function PageShell({ children }) {
-  return <><Navigation /><main className="page-content">{children}</main><footer className="site-footer"><span><CompassMark /> Make room for the good parts.</span><span>Thoughtfully planned, freely explored.</span></footer></>
 }
 
 function ProtectedRoute({ children }) {
@@ -207,11 +172,6 @@ function getTripCreationErrorMessage(error) {
   if (message.includes('valid_trip_dates') || message.includes('end_date')) return 'Check that the return date is the same as or later than the departure date.'
   return 'We could not create your trip. Your form entries are still here; please try again.'
 }
-function TripDetails() {
-  const { id } = useParams()
-  return <PageShell><div className="form-page details-page"><Link className="back-link" to="/">← Back to your trips</Link><div className="not-found-mark" aria-hidden="true">✳</div><p className="eyebrow">TRIP DETAILS</p><h1>Your next adventure</h1><p className="intro">Trip <code>{id}</code> is ready for its plans. Trip details will appear here when trips are available.</p><Link className="button" to="/trips/new">Plan a new trip <span aria-hidden="true">→</span></Link></div></PageShell>
-}
-
 function AuthPage({ register = false }) {
   const { user } = useAuth()
   const location = useLocation()
@@ -313,6 +273,7 @@ function App() {
   return <Routes>
     <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
     <Route path="/trips/new" element={<ProtectedRoute><NewTrip /></ProtectedRoute>} />
+    <Route path="/trips/:id/edit" element={<ProtectedRoute><EditTrip /></ProtectedRoute>} />
     <Route path="/trips/:id" element={<ProtectedRoute><TripDetails /></ProtectedRoute>} />
     <Route path="/login" element={<AuthRoute><AuthPage /></AuthRoute>} />
     <Route path="/register" element={<AuthRoute><AuthPage register /></AuthRoute>} />
