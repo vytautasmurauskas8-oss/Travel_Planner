@@ -64,6 +64,13 @@ npm run lint
 npm run build
 ```
 
+## Testavimo rezultatai
+
+- Rankinis CRUD testavimas: **8/8 sėkmingi**.
+- Rankinis validacijos testavimas: **8/8 sėkmingi**.
+- Šie rankinio testavimo rezultatai pateikti projekto užduotyje; šiame paruošimo etape jie nebuvo pakartoti.
+- Produkcinio build rezultatas: vykdykite `npm run build`; paskutinio patikrinimo rezultatą žr. projekto darbo suvestinėje.
+
 ## Supabase sauga
 
 `supabase/schema.sql` įjungia RLS `trips` ir `activities` lentelėms. Kelionės politikos tikrina `auth.uid() = user_id`; veiklų politikos patikrina, ar jų `trip_id` priklauso prisijungusio vartotojo kelionei. Kliento užklausose taip pat filtruojama pagal savininką, tačiau tikrą prieigos ribą užtikrina Supabase RLS. Lentelės ir politikos turi būti patikrintos ir Supabase projekte, nes vietinis SQL failas neįrodo, kokia schema šiuo metu įdiegta nuotolinėje duomenų bazėje.
