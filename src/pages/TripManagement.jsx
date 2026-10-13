@@ -109,7 +109,10 @@ export function TripDetails() {
 function TripItinerary({ trip, ownerId }) {
   const [state, setState] = useState({ tripId: null, ownerId: null, status: 'loading', activities: [], message: '' })
   const [retryCount, setRetryCount] = useState(0)
-  const [activeDay, setActiveDay] = useState(null)
+  const [activeForm, setActiveForm] = useState(null)
+  const [pendingDelete, setPendingDelete] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
+  const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
     let isCurrent = true
@@ -148,6 +151,33 @@ function TripItinerary({ trip, ownerId }) {
     : { status: 'loading', activities: [], message: '' }
   const days = getTripDays(trip.start_date, trip.end_date)
 
+  async function confirmDeleteActivity() {
+    if (!pendingDelete || deletingId) return
+    setDeleteError('')
+    setDeletingId(pendingDelete.id)
+    try {
+      const { data, error } = await supabase
+        .from('activities')
+        .delete()
+        .eq('id', pendingDelete.id)
+        .eq('trip_id', trip.id)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) {
+        setDeleteError('This activity was not deleted. It may no longer exist or you may not have permission.')
+        return
+      }
+      setState((current) => ({ ...current, activities: current.activities.filter((activity) => activity.id !== pendingDelete.id) }))
+      setActiveForm((current) => current?.activityId === pendingDelete.id ? null : current)
+      setPendingDelete(null)
+    } catch (error) {
+      console.error('Could not delete activity:', error)
+      setDeleteError('We could not delete this activity. Please try again.')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   return <section className="itinerary-section" aria-labelledby="itinerary-heading">
     <div className="itinerary-heading"><div><p className="eyebrow">THE DAY BY DAY</p><h2 id="itinerary-heading">Your itinerary</h2></div><span>{days.length} {days.length === 1 ? 'day' : 'days'}</span></div>
     {currentState.status === 'loading' && <p className="itinerary-feedback" role="status">Loading activities…</p>}
@@ -156,27 +186,41 @@ function TripItinerary({ trip, ownerId }) {
       const dayActivities = currentState.activities.filter((activity) => activity.activity_date === day.date)
       return <article className="itinerary-day" key={day.date}>
         <div className="day-marker"><span>DAY</span><strong>{day.number}</strong></div>
-        <div className="day-content"><div className="day-heading"><h3>{formatLongDate(day.date)}</h3><button className="add-activity-button" type="button" aria-expanded={activeDay === day.date} onClick={() => setActiveDay((current) => current === day.date ? null : day.date)}>{activeDay === day.date ? 'Cancel' : '+ Add activity'}</button></div>
-          {activeDay === day.date && <ActivityForm trip={trip} day={day.date} ownerId={ownerId} onCancel={() => setActiveDay(null)} onCreated={(activity) => {
+        <div className="day-content"><div className="day-heading"><h3>{formatLongDate(day.date)}</h3><button className="add-activity-button" type="button" aria-expanded={activeForm?.type === 'create' && activeForm.day === day.date} onClick={() => setActiveForm((current) => current?.type === 'create' && current.day === day.date ? null : { type: 'create', day: day.date })}>{activeForm?.type === 'create' && activeForm.day === day.date ? 'Cancel' : '+ Add activity'}</button></div>
+          {activeForm?.type === 'create' && activeForm.day === day.date && <ActivityForm key={`create-${day.date}`} trip={trip} day={day.date} ownerId={ownerId} onCancel={() => setActiveForm(null)} onCreated={(activity) => {
             setState((current) => current.tripId === trip.id && current.ownerId === ownerId
               ? { ...current, activities: [...current.activities, activity].sort(compareActivities) }
               : current)
-            setActiveDay(null)
+            setActiveForm(null)
           }} />}
-          {dayActivities.length === 0 && activeDay !== day.date
-            ? <p className="no-activities">No activities planned yet.</p>
-            : <ul className="activity-list">{dayActivities.map((activity) => <li className="activity-item" key={activity.id}><div className="activity-time">{activity.activity_time ? formatTime(activity.activity_time) : 'Any time'}</div><div className="activity-info"><h4>{activity.title}{activity.is_completed && <span className="activity-complete">Completed</span>}</h4>{activity.location && <p>{activity.location}</p>}{activity.notes && <p className="activity-notes">{activity.notes}</p>}</div></li>)}</ul>}
+          {dayActivities.length === 0 && !(activeForm?.type === 'create' && activeForm.day === day.date) && <p className="no-activities">No activities planned yet.</p>}
+          {dayActivities.length > 0 && <ul className="activity-list">{dayActivities.map((activity) => <li className="activity-item activity-item-managed" key={activity.id}>
+            {activeForm?.type === 'edit' && activeForm.activityId === activity.id
+              ? <ActivityForm key={`edit-${activity.id}`} trip={trip} day={day.date} ownerId={ownerId} activity={activity} onCancel={() => setActiveForm(null)} onUpdated={(updatedActivity) => {
+                setState((current) => ({ ...current, activities: current.activities.map((item) => item.id === updatedActivity.id ? updatedActivity : item).sort(compareActivities) }))
+                setActiveForm(null)
+              }} />
+              : <><div className="activity-time">{activity.activity_time ? formatTime(activity.activity_time) : 'Any time'}</div><div className="activity-info"><h4>{activity.title}{activity.is_completed && <span className="activity-complete">Completed</span>}</h4>{activity.location && <p>{activity.location}</p>}{activity.notes && <p className="activity-notes">{activity.notes}</p>}</div><div className="activity-actions"><button type="button" className="activity-action-button" onClick={() => setActiveForm({ type: 'edit', activityId: activity.id })} disabled={deletingId !== null}>Edit</button><button type="button" className="activity-action-button activity-delete-button" onClick={() => { setDeleteError(''); setPendingDelete(activity) }} disabled={deletingId !== null}>Delete</button></div></>}
+          </li>)}</ul>}
         </div>
       </article>
     })}</div>}
+    {pendingDelete && <div className="activity-dialog-backdrop"><section className="activity-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="activity-delete-title"><p className="eyebrow">REMOVE FROM ITINERARY</p><h3 id="activity-delete-title">Delete this activity?</h3><p>“{pendingDelete.title}” will be permanently deleted.</p>{deleteError && <p className="form-message form-error" role="alert">{deleteError}</p>}<div className="activity-dialog-actions"><button type="button" className="cancel-link" onClick={() => { if (!deletingId) { setPendingDelete(null); setDeleteError('') } }} disabled={deletingId !== null}>Cancel</button><button type="button" className="button button-danger" onClick={confirmDeleteActivity} disabled={deletingId !== null}>{deletingId === pendingDelete.id ? 'Deleting…' : 'Delete'}</button></div></section></div>}
   </section>
 }
 
-function ActivityForm({ trip, day, ownerId, onCancel, onCreated }) {
+function ActivityForm({ trip, day, ownerId, onCancel, onCreated, onUpdated, activity = null }) {
   const { user } = useAuth()
-  const [form, setForm] = useState({ title: '', activity_time: '', location: '', notes: '' })
+  const [form, setForm] = useState({
+    title: activity?.title ?? '',
+    activity_date: activity?.activity_date ?? day,
+    activity_time: activity?.activity_time ?? '',
+    location: activity?.location ?? '',
+    notes: activity?.notes ?? '',
+  })
   const [errorMessage, setErrorMessage] = useState('')
   const [saving, setSaving] = useState(false)
+  const isEditing = Boolean(activity)
 
   function updateField(event) {
     const { name, value } = event.target
@@ -191,8 +235,12 @@ function ActivityForm({ trip, day, ownerId, onCancel, onCreated }) {
       setErrorMessage('Enter an activity name.')
       return
     }
+    if (!form.activity_date || form.activity_date < trip.start_date || form.activity_date > trip.end_date) {
+      setErrorMessage('Choose a date within this trip.')
+      return
+    }
     if (!user || user.id !== ownerId) {
-      setErrorMessage('Your session changed. Reload the trip before adding an activity.')
+      setErrorMessage('Your session changed. Reload the trip before saving this activity.')
       return
     }
     if (!supabase) {
@@ -202,58 +250,57 @@ function ActivityForm({ trip, day, ownerId, onCancel, onCreated }) {
 
     setSaving(true)
     try {
-      const { data, error } = await supabase
-        .from('activities')
-        .insert({
-          trip_id: trip.id,
-          title: form.title.trim(),
-          activity_date: day,
-          activity_time: form.activity_time || null,
-          location: form.location.trim() || null,
-          notes: form.notes.trim() || null,
-          is_completed: false,
-        })
-        .select('id, trip_id, title, activity_date, activity_time, location, notes, is_completed')
-        .single()
+      const changes = {
+        title: form.title.trim(),
+        activity_date: form.activity_date,
+        activity_time: form.activity_time || null,
+        location: form.location.trim() || null,
+        notes: form.notes.trim() || null,
+      }
+      const selectedFields = 'id, trip_id, title, activity_date, activity_time, location, notes, is_completed'
+      const result = isEditing
+        ? await supabase.from('activities').update(changes).eq('id', activity.id).eq('trip_id', trip.id).select(selectedFields).maybeSingle()
+        : await supabase.from('activities').insert({ ...changes, trip_id: trip.id, is_completed: false }).select(selectedFields).single()
 
-      if (error) throw error
-      if (!data) {
-        setErrorMessage('The activity was not saved. Check that you still have access to this trip and try again.')
+      if (result.error) throw result.error
+      if (!result.data) {
+        setErrorMessage(`The activity was not ${isEditing ? 'updated' : 'saved'}. It may no longer exist or you may not have permission.`)
         return
       }
-      onCreated(data)
+      if (isEditing) onUpdated(result.data)
+      else onCreated(result.data)
     } catch (error) {
-      console.error('Could not create activity:', error)
-      setErrorMessage(getActivityCreationErrorMessage(error))
+      console.error(`Could not ${isEditing ? 'update' : 'create'} activity:`, error)
+      setErrorMessage(getActivitySaveErrorMessage(error, isEditing))
     } finally {
       setSaving(false)
     }
   }
 
   return <form className="activity-form" onSubmit={handleSubmit} noValidate>
-    <p className="activity-form-date">Adding to {formatLongDate(day)}</p>
+    <p className="activity-form-date">{isEditing ? 'Edit activity' : `Adding to ${formatLongDate(day)}`}</p>
     <label>Activity name<input name="title" value={form.title} onChange={updateField} placeholder="Visit the bamboo grove" required autoFocus /></label>
-    <div className="form-grid"><label>Time <span className="optional">(optional)</span><input name="activity_time" type="time" value={form.activity_time} onChange={updateField} /></label><label>Location <span className="optional">(optional)</span><input name="location" value={form.location} onChange={updateField} placeholder="Arashiyama" /></label></div>
+    {isEditing && <label>Date<input name="activity_date" type="date" value={form.activity_date} min={trip.start_date} max={trip.end_date} onChange={updateField} required /></label>}
+    <div className="form-grid"><label>Time <span className="optional">(optional)</span><input name="activity_time" type="time" step="1" value={form.activity_time} onChange={updateField} /></label><label>Location <span className="optional">(optional)</span><input name="location" value={form.location} onChange={updateField} placeholder="Arashiyama" /></label></div>
     <label>Description <span className="optional">(optional)</span><textarea name="notes" value={form.notes} onChange={updateField} rows="2" placeholder="A few details to remember" /></label>
     {errorMessage && <p className="form-message form-error" role="alert">{errorMessage}</p>}
-    <div className="activity-form-actions"><button className="cancel-link" type="button" onClick={onCancel} disabled={saving}>Cancel</button><button className="button" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save activity'}</button></div>
+    <div className="activity-form-actions"><button className="cancel-link" type="button" onClick={onCancel} disabled={saving}>Cancel</button><button className="button" type="submit" disabled={saving}>{saving ? 'Saving…' : (isEditing ? 'Save changes' : 'Save activity')}</button></div>
   </form>
 }
 
+function getActivitySaveErrorMessage(error, isEditing) {
+  const message = error?.message?.toLowerCase() ?? ''
+  if (error?.code === '42501' || message.includes('row-level security')) return 'You do not have permission to change activities in this trip.'
+  if (message.includes('activity_date') || message.includes('within trip dates')) return 'Choose a date within this trip.'
+  if (message.includes('network') || message.includes('fetch')) return 'Could not reach Supabase. Check your connection and try again.'
+  return `We could not ${isEditing ? 'save your changes' : 'save this activity'}. Your entries are still here; please try again.`
+}
 function compareActivities(left, right) {
   const dateOrder = left.activity_date.localeCompare(right.activity_date)
   if (dateOrder !== 0) return dateOrder
   if (!left.activity_time) return right.activity_time ? 1 : 0
   if (!right.activity_time) return -1
   return left.activity_time.localeCompare(right.activity_time)
-}
-
-function getActivityCreationErrorMessage(error) {
-  const message = error?.message?.toLowerCase() ?? ''
-  if (error?.code === '42501' || message.includes('row-level security')) return 'You do not have permission to add activities to this trip.'
-  if (message.includes('activity_date') || message.includes('within trip dates')) return 'Choose a date within this trip.'
-  if (message.includes('network') || message.includes('fetch')) return 'Could not reach Supabase. Check your connection and try again.'
-  return 'We could not save this activity. Your entries are still here; please try again.'
 }
 
 function getTripDays(startDate, endDate) {
