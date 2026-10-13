@@ -63,6 +63,47 @@ function AuthRoute({ children }) {
 }
 
 function Dashboard() {
+  const { user } = useAuth()
+  const [tripState, setTripState] = useState({ ownerId: null, status: 'loading', trips: [], message: '' })
+  const [retryCount, setRetryCount] = useState(0)
+
+  useEffect(() => {
+    let isCurrent = true
+
+    async function loadTrips() {
+      setTripState({ ownerId: user.id, status: 'loading', trips: [], message: '' })
+      if (!supabase) {
+        setTripState({ ownerId: user.id, status: 'error', trips: [], message: supabaseConfigError })
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('trips')
+        .select('id, title, country, city, start_date, end_date')
+        .eq('user_id', user.id)
+        .order('start_date', { ascending: true })
+
+      if (!isCurrent) return
+      if (error) {
+        console.error('Could not load trips:', error)
+        setTripState({ ownerId: user.id, status: 'error', trips: [], message: 'We could not load your trips. Check your connection and try again.' })
+        return
+      }
+
+      setTripState({ ownerId: user.id, status: 'success', trips: data ?? [], message: '' })
+    }
+
+    loadTrips().catch((error) => {
+      if (!isCurrent) return
+      console.error('Could not load trips:', error)
+      setTripState({ ownerId: user.id, status: 'error', trips: [], message: 'We could not load your trips. Check your connection and try again.' })
+    })
+
+    return () => { isCurrent = false }
+  }, [user.id, retryCount])
+
+  const currentTripState = tripState.ownerId === user.id ? tripState : { status: 'loading', trips: [], message: '' }
+
   return (
     <PageShell>
       <section className="welcome-row">
@@ -71,10 +112,18 @@ function Dashboard() {
       </section>
       <section className="trips-section" aria-labelledby="trips-heading">
         <div className="section-heading"><div><h2 id="trips-heading">Your trips</h2><p>The plans, the places, the possibilities.</p></div><Link className="text-link" to="/trips/new">+ Plan a trip</Link></div>
-        <div className="empty-state"><div className="empty-art" aria-hidden="true"><span className="sun">☼</span><span className="art-line line-one"/><span className="art-line line-two"/><span className="art-line line-three"/><span className="art-plane">✈</span></div><p className="eyebrow">THE MAP IS YOURS</p><h3>A fresh page. A thousand possibilities.</h3><p className="empty-copy">No trips just yet. Pick a place you’ve been dreaming about<br className="desktop-break" /> and let’s start putting it together.</p><Link className="button" to="/trips/new">Create your first trip <span aria-hidden="true">→</span></Link></div>
+        {currentTripState.status === 'loading' && <div className="trips-feedback" role="status" aria-live="polite">Loading your trips…</div>}
+        {currentTripState.status === 'error' && <div className="trips-feedback trips-error" role="alert"><p>{currentTripState.message}</p><button className="text-button" type="button" onClick={() => setRetryCount((count) => count + 1)}>Try again</button></div>}
+        {currentTripState.status === 'success' && currentTripState.trips.length === 0 && <div className="empty-state"><div className="empty-art" aria-hidden="true"><span className="sun">☼</span><span className="art-line line-one"/><span className="art-line line-two"/><span className="art-line line-three"/><span className="art-plane">✈</span></div><p className="eyebrow">THE MAP IS YOURS</p><h3>A fresh page. A thousand possibilities.</h3><p className="empty-copy">No trips just yet. Pick a place you’ve been dreaming about<br className="desktop-break" /> and let’s start putting it together.</p><Link className="button" to="/trips/new">Create your first trip <span aria-hidden="true">→</span></Link></div>}
+        {currentTripState.status === 'success' && currentTripState.trips.length > 0 && <div className="trip-grid">{currentTripState.trips.map((trip) => <Link className="trip-card" key={trip.id} to={`/trips/${trip.id}`}><span className="eyebrow">{trip.city}, {trip.country}</span><h3>{trip.title}</h3><p>{formatTripDates(trip.start_date, trip.end_date)}</p><span className="trip-card-link">View trip <span aria-hidden="true">→</span></span></Link>)}</div>}
       </section>
     </PageShell>
   )
+}
+
+function formatTripDates(startDate, endDate) {
+  const formatDate = (date) => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`))
+  return `${formatDate(startDate)} – ${formatDate(endDate)}`
 }
 
 function NewTrip() {
