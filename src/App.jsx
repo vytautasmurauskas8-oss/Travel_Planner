@@ -23,7 +23,7 @@ function AuthRoute({ children }) {
   const { user, loading } = useAuth()
   const location = useLocation()
   if (loading) return <main className="auth-loading" role="status">Loading your session…</main>
-  if (user) return <Navigate to={location.state?.from?.pathname ?? '/'} replace />
+  if (user) return <Navigate to={location.state?.from?.pathname ?? '/trips'} replace />
   return children
 }
 
@@ -84,6 +84,13 @@ function Dashboard() {
       </section>
     </PageShell>
   )
+}
+
+function LandingPage() {
+  return <PageShell><section className="welcome-row landing-hero">
+    <div><p className="eyebrow">TRAVEL PLANNER</p><h1>Plan your next adventure.</h1><p className="intro">Keep your travel ideas, trip details, and daily plans together in one thoughtful place. Start dreaming, then make it happen.</p><div className="landing-actions"><Link className="button" to="/login">Sign in <span aria-hidden="true">→</span></Link><Link className="button button-outline" to="/signup">Sign up</Link></div></div>
+    <div className="welcome-stamp" aria-hidden="true"><span>✳</span><small>GO<br />SOMEWHERE</small></div>
+  </section></PageShell>
 }
 
 function formatTripDates(startDate, endDate) {
@@ -149,7 +156,7 @@ function NewTrip() {
       }).select('id').single()
       if (error) throw error
       if (!data?.id) throw new Error('The trip was not returned after saving.')
-      navigate('/', { replace: true, state: { tripCreated: true } })
+      navigate('/trips', { replace: true, state: { tripCreated: true } })
     } catch (error) {
       console.error('Could not create trip:', error)
       setErrorMessage(getTripCreationErrorMessage(error))
@@ -159,14 +166,14 @@ function NewTrip() {
     }
   }
 
-  return <PageShell><div className="form-page"><Link className="back-link" to="/">← Back to your trips</Link><p className="eyebrow">SOMETHING TO LOOK FORWARD TO</p><h1>Plan a new trip</h1><p className="intro">Start with the basics. The details can come later.</p>
+  return <PageShell><div className="form-page"><Link className="back-link" to="/trips">← Back to your trips</Link><p className="eyebrow">SOMETHING TO LOOK FORWARD TO</p><h1>Plan a new trip</h1><p className="intro">Start with the basics. The details can come later.</p>
     <form className="form-card" onSubmit={handleSubmit} noValidate>
       <label>Trip name<input name="title" type="text" value={form.title} onChange={updateField} placeholder="A week among the temples" required aria-invalid={Boolean(fieldErrors.title)} aria-describedby={fieldErrors.title ? 'trip-title-error' : undefined} />{fieldErrors.title && <span className="field-error" id="trip-title-error">{fieldErrors.title}</span>}</label>
       <div className="form-grid"><label>City<input name="city" type="text" value={form.city} onChange={updateField} placeholder="Kyoto" required aria-invalid={Boolean(fieldErrors.city)} aria-describedby={fieldErrors.city ? 'trip-city-error' : undefined} />{fieldErrors.city && <span className="field-error" id="trip-city-error">{fieldErrors.city}</span>}</label><label>Country<input name="country" type="text" value={form.country} onChange={updateField} placeholder="Japan" required aria-invalid={Boolean(fieldErrors.country)} aria-describedby={fieldErrors.country ? 'trip-country-error' : undefined} />{fieldErrors.country && <span className="field-error" id="trip-country-error">{fieldErrors.country}</span>}</label></div>
       <div className="form-grid"><label>Departure<input name="startDate" type="date" value={form.startDate} onChange={updateField} required aria-invalid={Boolean(fieldErrors.startDate)} aria-describedby={fieldErrors.startDate ? 'trip-start-error' : undefined} />{fieldErrors.startDate && <span className="field-error" id="trip-start-error">{fieldErrors.startDate}</span>}</label><label>Return<input name="endDate" type="date" value={form.endDate} onChange={updateField} min={form.startDate || undefined} required aria-invalid={Boolean(fieldErrors.endDate)} aria-describedby={fieldErrors.endDate ? 'trip-end-error' : undefined} />{fieldErrors.endDate && <span className="field-error" id="trip-end-error">{fieldErrors.endDate}</span>}</label></div>
       <label>Description <span className="optional">(optional)</span><textarea name="description" value={form.description} onChange={updateField} placeholder="What are you looking forward to?" rows="3" /></label>
       {errorMessage && <p className="form-message form-error" role="alert">{errorMessage}</p>}
-      <div className="form-actions"><Link className="cancel-link" to="/">Cancel</Link><button className="button" type="submit" disabled={saving}>{saving ? 'Creating trip…' : 'Create Trip'} <span aria-hidden="true">→</span></button></div>
+      <div className="form-actions"><Link className="cancel-link" to="/trips">Cancel</Link><button className="button" type="submit" disabled={saving}>{saving ? 'Creating trip…' : 'Create Trip'} <span aria-hidden="true">→</span></button></div>
     </form></div></PageShell>
 }
 
@@ -220,14 +227,14 @@ function AuthPage({ register = false }) {
         const { data, error } = await supabase.auth.signUp({ email: normalizedEmail, password })
         if (error) throw error
         if (data.session) {
-          navigate(location.state?.from?.pathname ?? '/', { replace: true })
+          navigate(location.state?.from?.pathname ?? '/trips', { replace: true })
         } else {
           setSuccessMessage('Account created. Check your email for a confirmation link before signing in.')
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password })
         if (error) throw error
-        navigate(location.state?.from?.pathname ?? '/', { replace: true })
+        navigate(location.state?.from?.pathname ?? '/trips', { replace: true })
       }
     } catch (error) {
       console.error(`Supabase ${register ? 'sign up' : 'sign in'} failed:`, error)
@@ -248,7 +255,7 @@ function AuthPage({ register = false }) {
       {successMessage && <p className="form-message form-success" role="status">{successMessage}</p>}
       <button className="button button-full" type="submit" disabled={loading}>{loading ? (register ? 'Creating account…' : 'Signing in…') : (register ? 'Create Account' : 'Sign In')}</button>
     </form>
-    <p className="auth-switch">{register ? 'Already have an account?' : 'New around here?'} <Link to={register ? '/login' : '/register'}>{register ? 'Sign in' : 'Create an account'}</Link></p>
+    <p className="auth-switch">{register ? 'Already have an account?' : 'New around here?'} <Link to={register ? '/login' : '/signup'}>{register ? 'Sign in' : 'Create an account'}</Link></p>
   </div></PageShell>
 }
 
@@ -263,7 +270,7 @@ function getAuthErrorMessage(error, register) {
 }
 
 function NotFound() {
-  return <PageShell><div className="form-page not-found-page"><div className="not-found-mark" aria-hidden="true">404</div><p className="eyebrow">OFF THE MAP</p><h1>Looks like a wrong turn.</h1><p className="intro">We can’t find the page you’re looking for. Let’s get you back on track.</p><Link className="button" to="/">Back to your trips <span aria-hidden="true">→</span></Link></div></PageShell>
+  return <PageShell><div className="form-page not-found-page"><div className="not-found-mark" aria-hidden="true">404</div><p className="eyebrow">OFF THE MAP</p><h1>Looks like a wrong turn.</h1><p className="intro">We can’t find the page you’re looking for. Let’s get you back on track.</p><Link className="button" to="/">Back to the home page <span aria-hidden="true">→</span></Link></div></PageShell>
 }
 
 function SupabaseCheck() {
@@ -278,12 +285,14 @@ function SupabaseCheck() {
 
 function App() {
   return <Routes>
-    <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+    <Route path="/" element={<LandingPage />} />
+    <Route path="/trips" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
     <Route path="/trips/new" element={<ProtectedRoute><NewTrip /></ProtectedRoute>} />
     <Route path="/trips/:id/edit" element={<ProtectedRoute><EditTrip /></ProtectedRoute>} />
     <Route path="/trips/:id" element={<ProtectedRoute><TripDetails /></ProtectedRoute>} />
     <Route path="/login" element={<AuthRoute><AuthPage /></AuthRoute>} />
     <Route path="/register" element={<AuthRoute><AuthPage register /></AuthRoute>} />
+    <Route path="/signup" element={<AuthRoute><AuthPage register /></AuthRoute>} />
     <Route path="/supabase-check" element={<SupabaseCheck />} />
     <Route path="*" element={<NotFound />} />
   </Routes>

@@ -21,7 +21,7 @@ function Navigation() {
       console.error('Supabase sign out failed:', error)
       return
     }
-    navigate('/login', { replace: true })
+    navigate('/', { replace: true })
     setMobileMenuOpen(false)
   }
 
@@ -29,10 +29,10 @@ function Navigation() {
     <Link className="brand" to="/" aria-label="Travel Planner home"><CompassMark /><span>travel<span className="brand-light">planner</span></span></Link>
     <button className="mobile-menu-toggle" type="button" aria-expanded={mobileMenuOpen} aria-controls="site-navigation" onClick={() => setMobileMenuOpen((open) => !open)}>{mobileMenuOpen ? 'Close' : 'Menu'}</button>
     <div id="site-navigation" className={`site-navigation${mobileMenuOpen ? ' mobile-menu-open' : ''}`}>
-      <nav className="main-nav" aria-label="Main navigation"><NavLink to="/" end onClick={() => setMobileMenuOpen(false)}>My trips</NavLink><NavLink to="/trips/new" className="nav-create" onClick={() => setMobileMenuOpen(false)}>+ <span>New trip</span></NavLink></nav>
+      <nav className="main-nav" aria-label="Main navigation">{user && <><NavLink to="/trips" end onClick={() => setMobileMenuOpen(false)}>My trips</NavLink><NavLink to="/trips/new" className="nav-create" onClick={() => setMobileMenuOpen(false)}>+ <span>New trip</span></NavLink></>}</nav>
       <div className="account-nav">{!loading && (user
       ? <><span className="user-email">{user.email}</span><button className="nav-button" type="button" onClick={handleLogout}>Log out</button></>
-      : <><NavLink to="/login" onClick={() => setMobileMenuOpen(false)}>Sign in</NavLink><NavLink className="button button-small" to="/register" onClick={() => setMobileMenuOpen(false)}>Sign up</NavLink></>)}</div>
+      : <><NavLink to="/login" onClick={() => setMobileMenuOpen(false)}>Sign in</NavLink><NavLink className="button button-small" to="/signup" onClick={() => setMobileMenuOpen(false)}>Sign up</NavLink></>)}</div>
     </div>
     {logoutError && <p className="nav-error" role="alert">{logoutError}</p>}
   </header>

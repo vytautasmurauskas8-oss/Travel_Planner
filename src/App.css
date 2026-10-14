@@ -18,6 +18,12 @@ h1, h2, h3, p { margin-top: 0; }
 h1 { color: var(--ink); font: 400 clamp(39px, 5vw, 58px)/1.08 var(--serif); letter-spacing: -1.8px; margin-bottom: 17px; }
 .intro { color: var(--muted); font-size: 14px; line-height: 1.8; }
 .welcome-row .intro { margin-bottom: 0; }
+.landing-hero { min-height: 440px; gap: 32px; }
+.landing-hero > div:first-child { max-width: 610px; }
+.landing-hero .intro { max-width: 520px; }
+.landing-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+.button-outline { border: 1px solid #d9c9bd; color: var(--terracotta); background: transparent; }
+.button-outline:hover { border-color: var(--terracotta); color: white; }
 .welcome-stamp { width: 136px; height: 136px; border: 1px solid #e9d9cd; border-radius: 50%; color: var(--terracotta); display: flex; align-items: center; justify-content: center; flex-direction: column; transform: rotate(10deg); margin-right: 32px; }
 .welcome-stamp span { font-size: 41px; line-height: 1; }
 .welcome-stamp small { margin-top: 4px; text-align: center; font-size: 8px; font-weight: 700; letter-spacing: 1.8px; line-height: 1.4; }
